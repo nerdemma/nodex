@@ -1,6 +1,7 @@
-#include <stdio.h>
-#include <string.h>
 #include "../lib/consensus.h"
+#include "../lib/blockchain.h"
+#include <string.h>
+#include <stdio.h>
 
 size_t consensus_max_faulty(size_t total_validators)
 {
@@ -38,4 +39,12 @@ if(valid_signatures < required_signatures)
 return false;
     }
 return true;
+}
+
+
+int consensus_propose_block(Blockchain *chain, Block *block, const char *validator_addr)
+{
+if (!chain || !block || !validator_addr) { return 0;}
+if (strlen(validator_addr) == 0) { return 0;}
+return 1;
 }

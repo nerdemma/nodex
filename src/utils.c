@@ -48,3 +48,29 @@ out[len * 2] = ' ';
 }
 
 
+void print_hash(const uint8_t *hash, size_t len)
+{
+if(!hash) return;
+    for(size_t i = 0; i < len; i++)
+    {
+    printf("%02x", hash[i]);
+    }
+}
+
+
+
+void blockchain_print(const Blockchain *chain, const ValidatorSet *val_set)
+{
+if(!chain) return;
+
+printf("[+] Estado de la cadena: Total Bloques = %zu | Valida = %s\n",
+           chain->length, blockchain_is_valid(chain, val_set) ? "SI" : "NO");
+           
+    for(size_t i = 0; i < chain->length; i++)
+    {
+    printf(" - Bloque [%zu] OK | Hash:", i);
+    print_hash((const uint8_t *) chain->blocks[i]->hash, 32);
+    printf("\n");
+    }
+
+}

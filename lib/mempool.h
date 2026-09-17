@@ -18,5 +18,6 @@ void mempool_clear(Mempool *mp);
 
 int mempool_save(const Mempool *mp, const char *filename);
 int mempool_load(Mempool *mp, const char *filename);
+void mempool_remove_tx(Mempool *mp, const Transaction *tx);
 
 #endif //MEMPOOL_H

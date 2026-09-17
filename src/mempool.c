@@ -86,3 +86,25 @@ size_t count = 0;
 	fclose(f);
 	return 0;
 }
+
+
+
+void mempool_remove_tx(Mempool *mp, const Transaction *tx)
+{
+    if(!mp || mp->count == 0) return;
+
+    for(size_t i=0; i < mp->count; i++)
+    {
+
+    // compara contenido/hash de la transacion
+        if (memcmp (&mp->transactions[i], tx, sizeof(Transaction)) == 0)
+        {
+        for (size_t j = i; i < mp->count - 1; j++){    
+        mp->transactions[j] = mp->transactions[ j + 1];
+        }
+            
+        mp->count --;
+        break;
+        }    
+    }
+}

@@ -240,3 +240,4 @@ void blockchain_free(Blockchain *chain)
         free(chain);
     }
 }
+

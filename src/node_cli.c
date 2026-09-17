@@ -10,6 +10,9 @@
 #include "../lib/peer_pool.h"
 #include "../lib/net.h"
 #include "../lib/state.h"
+#include "../lib/consensus.h"
+#include "../lib/storage.h"
+#include "../lib/utils.h"
 
 ValidatorSet val_set;
 
@@ -19,9 +22,9 @@ void print_help(const char *prog_name)
     printf("Uso: %s [OPCIONES]\n", prog_name);
     printf(" -s --status                Ver el estado e integridad de la cadena local\n");
     printf(" -t --tx<from:to:amount>    Crear una nueva trasaccion de pureba (ej: ALICE:BOB:25.5\n");
+    printf(" -c --connect <ip:port>     Connectar a un peer remoto (ej:192.168.0.2:8333)\n");
     printf(" -b --balance <address>     Consultar el saldo de una cuenta \n");
     printf(" -b --propose <validator>   Proponer/validar un nuevo bloque de consenso \n");
-    printf(" -c --connect <ip:port>     Connectar a un peer remoto (ej:192.168.0.2:8333)\n");
     printf(" -h --help                  Mostrar esta ayuda.\n");
 
 }
@@ -46,9 +49,9 @@ mempool_init(&mp);
 static struct option long_options[] = {
 {"status",  no_argument,        0,  's'},
 {"tx",      required_argument,  0,  't'},
+{"connect", required_argument,  0,  'c'},
 {"balance", required_argument,  0,  'b'},
 {"propose", required_argument,  0,  'p'},
-{"connect", required_argument,  0,  'c'},
 {"help",    no_argument,        0,  'h'},
 {0, 0, 0, 0}
 };
@@ -64,21 +67,14 @@ while ((opt = getopt_long(argc, argv, "smt:c:b:p:h", long_options, &option_index
         
         case 's':
         {
-            memset(&val_set, 0, sizeof(ValidatorSet));
-            printf("[+] Estado de la cadena: Total Bloques = %zu | Valida = %s\n",
-            chain->length,
-            blockchain_is_valid(chain, NULL) ? "YES" : "NO");
-        
-        for(size_t i = 0; i < chain->length; i++)
-        {
-            if (chain->blocks[i])
-            {
-            printf("    - Bloque [%zu] OK | Hash: %16s...\n",
-             i, chain->blocks[i]->hash);
+            if (chain->length == 0 || !chain->blocks[0]) {
+                printf("[!] No hay bloques disponibles en la cadena local.\n");
+                break;
             }
-		}
 
-        break;     
+            printf(" - Bloque [0] | Hash: %s\n", chain->blocks[0]->hash);
+            printf(" - Total de bloques: %zu\n", chain->length);
+            break;
         }
         
         
@@ -160,56 +156,56 @@ while ((opt = getopt_long(argc, argv, "smt:c:b:p:h", long_options, &option_index
 		
         case 'p':
         {
-        const char *validar_addr = optarg;
+        const char *validator_addr = optarg;
         mempool_load(&mp, MEMPOOL_FILE);
 
         if(mp.count == 0)
         {
-        printf(" [!] No hay transacciones en la mempool para proponer un bloque. \n");
+        printf("[!] No hay transacciones en la mempool para proponer un bloque. \n");
         break;
         }
 
-        Block *new_block = block_create(chain->length,
-        chain->blocks[chain->length - 1]->hash, validator_addr);
+        // Obtiene el hash del bloque previo
+        const uint8_t *prev_hash = (const uint8_t *)chain->blocks[chain->length - 1]->hash;
         
-        // cargar transacciones de la mempool al bloque
-        size_t added = 0;
+        // crea el bloque inicializando con las transaciones de la mempool
+        uint32_t tx_count = (mp.count > MAX_TX_PER_BLOCK) ? MAX_TX_PER_BLOCK : (uint32_t)mp.count;
+        Block *new_block = block_create(prev_hash, mp.transactions, tx_count);        
         
-        for(size_t i = 0; i < mp.count && i < MAX_TX_PER_BLOCK; i++)
+        if(!new_block)
         {
-        block_add_transaction(new_block, &mp.transactions[i]);
-        added++;
+        fprintf(stderr, "[!] Error al instanciar el bloque. \n");
+        break;
         }
-        
-        // genera el bloque con las reglas de consenso
 
-        if(consensus_propose_block(chain, new_block, validator_addr))
+        // se valida la propuesta mediante el consenso
+        if (consensus_propose_block(chain, new_block, validator_addr))
         {
-            if(blockchain_add_block(chain, new_block))
+            if(blockchain_add_block(chain, new_block, &val_set)) 
             {
-            blockchain_save(chain, CHAIN_FILE);
-            mempool_remove_included(&mp, new_block);
+           storage_save_blockchain(chain, CHAIN_FILE);
+
+                // remueve las transaciones procesadas de la mempool
+                for(uint32_t i = 0; i < tx_count; i++)
+                {
+                mempool_remove_tx(&mp, &mp.transactions[0]);
+                }
             mempool_save(&mp, MEMPOOL_FILE);
-            printf("[+] Bloque #%zu propuesto y validado con exito por '%s' (%zu TXs incluidas).\n",
-            new_block->index, validator_addr, added);
-            }
-            else
-            {
 
-            printf("[!] Error: El bloque propuesto no supero las validaciones del estado. \n");
+            fprintf(stderr, "[!] Error: El bloque propuesto no superó las validaciones del estado.\n");
             block_free(new_block);
+
+
             }
         }
-
+        
         else
         {
-        printf("[!] Rechazado: El nodo '%s' no tiene permisos de validador. \n", validator_addr);
+        fprintf(stderr, "[!] Rechazado: El nodo '%s' no tiene permisos de validador \n", validator_addr);
         block_free(new_block);
-        }
+        }   
         break;
-        
         }
-
 
         case 'h':
         {
