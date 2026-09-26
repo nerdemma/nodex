@@ -9,6 +9,15 @@
 ![Cryptography](https://img.shields.io/badge/cryptography-ECDSA-orange)
 ![License](https://img.shields.io/badge/license-GPLv3-green)
 
+
+![GCC](https://img.shields.io/badge/GCC-14.2%2B-blue)
+![Language](https://img.shields.io/badge/language-C99%2FC11-blue)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20BSD%20%7C%20macOS%20%7C%20Windows-lightgrey)
+![Consensus](https://img.shields.io/badge/consensus-IBFT%202.0%20%7C%20QBFT-purple)
+![Cryptography](https://img.shields.io/badge/cryptography-ECDSA-orange)
+![License](https://img.shields.io/badge/license-GPLv3-green)
+
+
 **Nodex** es una implementación experimental y modular de una cadena de bloques escrita en **C**, diseñada para explorar redes distribuidas, comunicación **P2P**, consenso tolerante a fallos bizantinos y autenticación criptográfica.
 
 El proyecto utiliza un modelo de consenso inspirado en **IBFT 2.0 / QBFT** y firmas digitales **ECDSA** para autenticar transacciones y bloques.
