@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev pkg-config openssl valgrind
+
+      - name: Build
+        run: |
+          make -j2
+
+      - name: Run tests
+        run: |
+          chmod +x tests/testing.sh
+          cd tests
+          bash testing.sh

@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 
 
@@ -31,25 +34,46 @@ void mempool_clear(Mempool *mp)
 
 int mempool_save(const Mempool *mp, const char *filename)
 {
-if(!mp || !filename) return -1;
-FILE *f = fopen(filename, "wb");
-if(!f) return -1;
+	if(!mp || !filename) return -1;
+
+	char tmpname[512];
+	snprintf(tmpname, sizeof(tmpname), "%s.tmp", filename);
+
+	FILE *f = fopen(tmpname, "wb");
+	if(!f) return -1;
 
 	if(fwrite(&mp->count, sizeof(size_t),1,f) != 1)
 	{
-	fclose(f);
-	return -1;
-	}
-	
-	if(mp->count > 0)
-	{
-	if(fwrite(mp->transactions, sizeof(Transaction), mp->count, f) != mp->count)
-	fclose(f);
-	return -1;
+		fclose(f);
+		unlink(tmpname);
+		return -1;
 	}
 
-fclose(f);
-return 0;
+	if(mp->count > 0)
+	{
+		if(fwrite(mp->transactions, sizeof(Transaction), mp->count, f) != mp->count)
+		{
+			fclose(f);
+			unlink(tmpname);
+			return -1;
+		}
+	}
+
+	fflush(f);
+	fsync(fileno(f));
+	fclose(f);
+
+	// set restrictive permissions
+	chmod(tmpname, S_IRUSR | S_IWUSR);
+
+	// atomic rename
+	if(rename(tmpname, filename) != 0)
+	{
+		unlink(tmpname);
+		return -1;
+	}
+
+	return 0;
 }
 
 int mempool_load(Mempool *mp, const char *filename)
@@ -91,20 +115,20 @@ size_t count = 0;
 
 void mempool_remove_tx(Mempool *mp, const Transaction *tx)
 {
-    if(!mp || mp->count == 0) return;
+    if(!mp || mp->count == 0 || !tx) return;
 
-    for(size_t i=0; i < mp->count; i++)
+    for(size_t i = 0; i < mp->count; i++)
     {
-
-    // compara contenido/hash de la transacion
-        if (memcmp (&mp->transactions[i], tx, sizeof(Transaction)) == 0)
+        if (memcmp(&mp->transactions[i], tx, sizeof(Transaction)) == 0)
         {
-        for (size_t j = i; i < mp->count - 1; j++){    
-        mp->transactions[j] = mp->transactions[ j + 1];
+            for (size_t j = i; j < mp->count - 1; j++)
+            {
+                mp->transactions[j] = mp->transactions[j + 1];
+            }
+
+            memset(&mp->transactions[mp->count - 1], 0, sizeof(Transaction));
+            mp->count--;
+            break;
         }
-            
-        mp->count --;
-        break;
-        }    
     }
 }

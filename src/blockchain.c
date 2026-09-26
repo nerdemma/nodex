@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "../lib/blockchain.h"
 #include "../lib/block.h"
@@ -96,23 +97,36 @@ Blockchain *blockchain_create(void)
     if (!chain)
         return NULL;
 
-    // Construir la transaccion Genesis
-    Transaction genesis_tx;
-    transaction_create(&genesis_tx, "SYSTEM", "GENESIS_REWARD_ADDRESS", 50.0, 0.0);
-    strncpy(genesis_tx.data, "Genesis Block: IBFT 2.0 2026", TX_DATA_LEN - 1);
+    Transaction genesis_txs[3];
+    memset(genesis_txs, 0, sizeof(genesis_txs));
 
-    // Crear el bloque genesis
-    Block *genesis = block_create(NULL, &genesis_tx, 1);
+    transaction_create(&genesis_txs[0], "SYSTEM", "ALICE", (uint64_t)(1000.0 * 1000000.0), 0, 0, NULL);
+    strncpy(genesis_txs[0].data, "Genesis allocation for ALICE", TX_DATA_LEN - 1);
+    transaction_create(&genesis_txs[1], "SYSTEM", "BOB", (uint64_t)(1000.0 * 1000000.0), 0, 0, NULL);
+    strncpy(genesis_txs[1].data, "Genesis allocation for BOB", TX_DATA_LEN - 1);
+    transaction_create(&genesis_txs[2], "SYSTEM", "CARLIE", (uint64_t)(1000.0 * 1000000.0), 0, 0, NULL);
+    strncpy(genesis_txs[2].data, "Genesis allocation for CARLIE", TX_DATA_LEN - 1);
+
+    Block *genesis = block_create(NULL, genesis_txs, 3);
     if (!genesis)
     {
         free(chain);
         return NULL;
     }
 
+    genesis->index = 0;
+    genesis->timestamp = (uint32_t)time(NULL);
+    genesis->round = 0;
+    strncpy(genesis->proposer, "VAL_NODE_01", sizeof(genesis->proposer) - 1);
+    genesis->commit_signatures_count = 1;
+    strncpy(genesis->commit_signatures[0], "VAL_NODE_01", sizeof(genesis->commit_signatures[0]) - 1);
+    block_calculate_hash(genesis);
+
     chain->capacity = 10;
-    chain->blocks = (Block **)malloc(sizeof(Block **) * chain->capacity);
+    chain->blocks = (Block **)malloc(sizeof(Block *) * chain->capacity);
     chain->blocks[0] = genesis;
     chain->length = 1;
+    memset(chain->filepath, 0, sizeof(chain->filepath));
 
     return chain;
 }
@@ -186,58 +200,24 @@ int blockchain_save_block(const Block *block, const char *filepath)
     return (written == 1) ? 0 : -1;
 }
 
-Blockchain *blockchain_init(const char *filepath)
+
+Blockchain* blockchain_init(const char *db_path)
 {
-    FILE *file = fopen(filepath, "rb");
-    if (!file)
-    {
-        printf("[+] Cadena previa no encontrada. Generando bloque genesis...\n");
-        Blockchain *chain = blockchain_create();
+	Blockchain *chain = storage_load_blockchain(db_path);
 
-        if (chain && chain->length > 0)
-        {
-            blockchain_save_block(chain->blocks[0], filepath);
-            printf("[+] Bloque genesis guardado exitosamente '%s'.\n", filepath);
-        }
-        return chain;
-    }
+	if(chain != NULL)
+	{
+	printf("[STORAGE] Cadena cargada exitosamente desde :%s (Altura: %uint)\n", 
+	db_path, chain->height);
+	return chain;
+	}
 
-    printf("[+] Archivo '%s' encontrado. Cargando blockchain", filepath);
-    Blockchain *chain = (Blockchain *)malloc(sizeof(Blockchain));
-
-    chain->capacity = 10;
-    chain->length = 0;
-    chain->blocks = (Block **)malloc(sizeof(Block *) * chain->capacity);
-    uint8_t buf[HEADER_SIZE];
-
-    while (fread(buf, HEADER_SIZE, 1, file) == 1)
-    {
-        if (chain->length >= chain->capacity)
-        {
-            chain->capacity *= 2;
-            chain->blocks = (Block **)realloc(chain->blocks, sizeof(Block *) * chain->capacity);
-        }
-
-        Block *b = (Block *)calloc(1, sizeof(Block));
-        double_sha256(buf, HEADER_SIZE,(uint8_t *)b->hash);
-        chain->blocks[chain->length++] = b;
-    }
-
-    fclose(file);
-    printf("[+] Carga completa, total de bloques en la cadena: %zu\n", chain->length);
-    return chain;
+// si no existe el achivo se incializara desde cero
+	printf("[STORAGE] No se encontró historia previa. Creando bloque Genesis...\n");
+	chain = blockchain_create_empty();
+	Block *genesis = create_genesis_block();
+	
+	blockchain_add_block(chain, genesis);
+	storage_save_blockchain(db_path, chain);
+return chain;
 }
-
-void blockchain_free(Blockchain *chain)
-{
-    if (chain)
-    {
-        for (size_t i = 0; i < chain->length; i++)
-        {
-            block_free(chain->blocks[i]);
-        }
-        free(chain->blocks);
-        free(chain);
-    }
-}
-

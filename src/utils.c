@@ -6,21 +6,53 @@
 
 void print_blockchain_json(const Blockchain *chain)
 {
-if(!chain) return;
-printf("{\"status\":\"success\",\"data\":[");
-for(size_t i=0; i < chain->length; i++)
-    {
-    Block *b = chain->blocks[i];
-    printf("{\"index\":%u,\"hash\":\"%s\",\"prev_hash\":\"%s\",\"tx_count\":%u}%s",
-    
-        b->index,
-        b->hash,
-        b->prev_hash,
-        b->tx_count,
-        (i < chain->length - 1) ? "," : "");
+    if(!chain) {
+        printf("{\"status\":\"error\",\"message\":\"no blockchain available\"}\n");
+        return;
+    }
 
+    printf("{\"status\":\"success\",\"chain_length\":%zu,\"blocks\":[", chain->length);
+    for (size_t i = 0; i < chain->length; i++)
+    {
+        Block *b = chain->blocks[i];
+        if (!b) {
+            continue;
+        }
+
+        printf("{\"index\":%u,\"hash\":\"%s\",\"prev_hash\":\"%s\",\"tx_count\":%u,\"timestamp\":%u}%s",
+               b->index,
+               b->hash,
+               b->prev_hash,
+               b->tx_count,
+               b->timestamp,
+               (i < chain->length - 1) ? "," : "");
+    }
     printf("]}\n");
 }
+
+void print_mempool_json(const Mempool *mp)
+{
+    if (!mp) {
+        printf("{\"status\":\"error\",\"message\":\"no mempool available\"}\n");
+        return;
+    }
+
+    printf("{\"status\":\"success\",\"count\":%zu,\"transactions\":[", mp->count);
+    for (size_t i = 0; i < mp->count; i++)
+    {
+        const Transaction *tx = &mp->transactions[i];
+         double amount = (double)tx->amount / 1000000.0;
+         double fee = (double)tx->fee / 1000000.0;
+         printf("{\"sender\":\"%s\",\"receiver\":\"%s\",\"amount\":%.6f,\"fee\":%.6f,\"pubkey\":\"%s\",\"signature\":\"%s\"}%s",
+             tx->sender,
+             tx->receiver,
+             amount,
+             fee,
+             tx->pubkey,
+             tx->signature,
+             (i < mp->count - 1) ? "," : "");
+    }
+    printf("]}\n");
 }
 
 void sha256(const uint8_t *data, size_t len, uint8_t out[32])
@@ -41,10 +73,10 @@ sha256(first, 32, out);
 }
 
 void hex_encode(const uint8_t *in, size_t len, char *out) {
-for (size_t i = 0; i < len; i++) {
-sprintf(out + (i * 2), "%02x", in[i]);
-}
-out[len * 2] = ' ';
+    for (size_t i = 0; i < len; i++) {
+        sprintf(out + (i * 2), "%02x", in[i]);
+    }
+    out[len * 2] = '\0';
 }
 
 
