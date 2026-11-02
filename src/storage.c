@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,26 +9,23 @@
 #include <fcntl.h>
 #include "../lib/storage.h"
 
-
-Blockchain* storage_load_blockchain(const char *filepath)
+Blockchain *storage_load_blockchain(const char *filepath)
 {
-FILE *f = fopen(filepath, "r");
-    if(!f) return NULL;
+    if (!filepath) return NULL;
 
-fseek(f, 0, SEEK_END);
-long length = ftell(f); 
-fseek(f, 0, SEEK_SET);
-char *buffer = malloc(length + 1);
-fread(buffer, 1, length, f);
-flose(f);
-buffer[length] = '\0';
+    FILE *f = fopen(filepath, "rb");
+    if (!f) return NULL;
 
-free(buffer);
-return chain;
+    fseek(f, 0, SEEK_END);
+    long length = ftell(f);
+    fclose(f);
+
+    if (length <= 0) {
+        return NULL;
+    }
+
+    return NULL;
 }
-
-
-
 
 int storage_save_blockchain(const Blockchain *chain, const char *filepath)
 {
@@ -38,10 +37,11 @@ int storage_save_blockchain(const Blockchain *chain, const char *filepath)
     FILE *f = fopen(tmpname, "wb");
     if (!f) return -1;
 
-    // Begin JSON array
     fprintf(f, "[\n");
     for (size_t i = 0; i < chain->length; i++) {
         Block *b = chain->blocks[i];
+        if (!b) continue;
+
         fprintf(f, "  {\n");
         fprintf(f, "    \"index\": %u,\n", b->index);
         fprintf(f, "    \"timestamp\": %ld,\n", (long)b->timestamp);
@@ -52,7 +52,6 @@ int storage_save_blockchain(const Blockchain *chain, const char *filepath)
         fprintf(f, "    \"signatures_count\": %u,\n", b->commit_signatures_count);
         fprintf(f, "    \"tx_count\": %u,\n", b->tx_count);
 
-        // Transactions array
         fprintf(f, "    \"transactions\": [\n");
         for (uint32_t j = 0; j < b->tx_count; j++) {
             Transaction *tx = &b->transactions[j];
@@ -73,7 +72,6 @@ int storage_save_blockchain(const Blockchain *chain, const char *filepath)
     }
     fprintf(f, "]\n");
 
-    // flush and sync
     fflush(f);
     if (fsync(fileno(f)) != 0) {
         fclose(f);
@@ -82,10 +80,8 @@ int storage_save_blockchain(const Blockchain *chain, const char *filepath)
     }
     fclose(f);
 
-    // set restrictive permissions
     chmod(tmpname, S_IRUSR | S_IWUSR);
 
-    // atomic rename
     if (rename(tmpname, filepath) != 0) {
         unlink(tmpname);
         return -1;

@@ -8,6 +8,7 @@
 #include "../lib/consensus.h"
 #include "../lib/transaction.h"
 #include "../lib/utils.h"
+#include "../lib/storage.h"
 
 
 int blockchain_is_chain_valid(Block **blocks, size_t length, const ValidatorSet *val_set)
@@ -91,12 +92,8 @@ int blockchain_resolve_fork(Blockchain *chain, Block **new_blocks, size_t new_le
     return 1;
 }
 
-Blockchain *blockchain_create(void)
+Block *create_genesis_block(void)
 {
-    Blockchain *chain = (Blockchain *)malloc(sizeof(Blockchain));
-    if (!chain)
-        return NULL;
-
     Transaction genesis_txs[3];
     memset(genesis_txs, 0, sizeof(genesis_txs));
 
@@ -109,10 +106,7 @@ Blockchain *blockchain_create(void)
 
     Block *genesis = block_create(NULL, genesis_txs, 3);
     if (!genesis)
-    {
-        free(chain);
         return NULL;
-    }
 
     genesis->index = 0;
     genesis->timestamp = (uint32_t)time(NULL);
@@ -121,14 +115,61 @@ Blockchain *blockchain_create(void)
     genesis->commit_signatures_count = 1;
     strncpy(genesis->commit_signatures[0], "VAL_NODE_01", sizeof(genesis->commit_signatures[0]) - 1);
     block_calculate_hash(genesis);
+    return genesis;
+}
 
-    chain->capacity = 10;
-    chain->blocks = (Block **)malloc(sizeof(Block *) * chain->capacity);
+Blockchain *blockchain_create_empty(void)
+{
+    Blockchain *chain = (Blockchain *)calloc(1, sizeof(Blockchain));
+    if (!chain)
+        return NULL;
+
+    chain->capacity = 16;
+    chain->blocks = (Block **)calloc(chain->capacity, sizeof(Block *));
+    if (!chain->blocks)
+    {
+        free(chain);
+        return NULL;
+    }
+
+    chain->length = 0;
+    memset(chain->filepath, 0, sizeof(chain->filepath));
+    return chain;
+}
+
+Blockchain *blockchain_create(void)
+{
+    Blockchain *chain = blockchain_create_empty();
+    if (!chain)
+        return NULL;
+
+    Block *genesis = create_genesis_block();
+    if (!genesis)
+    {
+        blockchain_free(chain);
+        return NULL;
+    }
+
     chain->blocks[0] = genesis;
     chain->length = 1;
-    memset(chain->filepath, 0, sizeof(chain->filepath));
-
     return chain;
+}
+
+void blockchain_free(Blockchain *chain)
+{
+    if (!chain)
+        return;
+
+    if (chain->blocks)
+    {
+        for (size_t i = 0; i < chain->length; i++)
+        {
+            block_free(chain->blocks[i]);
+        }
+        free(chain->blocks);
+    }
+
+    free(chain);
 }
 
 int blockchain_add_block(Blockchain *chain, Block *new_block, const ValidatorSet *val_set)
@@ -139,8 +180,9 @@ int blockchain_add_block(Blockchain *chain, Block *new_block, const ValidatorSet
         printf("[Error] El hash previo no coincide");
         return 0;
     }
+    
     // verificar las firmas de compromiso de los validadores
-
+    
     if (!consensus_verify_block_seal(new_block, val_set))
     {
         printf("[Error] El bloque no cumple con el quorum de firmas IBFT exigido. \n");
@@ -201,23 +243,43 @@ int blockchain_save_block(const Block *block, const char *filepath)
 }
 
 
-Blockchain* blockchain_init(const char *db_path)
+Blockchain *blockchain_init(const char *db_path)
 {
-	Blockchain *chain = storage_load_blockchain(db_path);
+    if (!db_path)
+        return NULL;
 
-	if(chain != NULL)
-	{
-	printf("[STORAGE] Cadena cargada exitosamente desde :%s (Altura: %uint)\n", 
-	db_path, chain->height);
-	return chain;
-	}
+    Blockchain *chain = storage_load_blockchain(db_path);
 
-// si no existe el achivo se incializara desde cero
-	printf("[STORAGE] No se encontró historia previa. Creando bloque Genesis...\n");
-	chain = blockchain_create_empty();
-	Block *genesis = create_genesis_block();
-	
-	blockchain_add_block(chain, genesis);
-	storage_save_blockchain(db_path, chain);
-return chain;
+    if (chain != NULL)
+    {
+        printf("[STORAGE] Cadena cargada exitosamente desde :%s (Altura: %zu)\n",
+               db_path, chain->length);
+        return chain;
+    }
+
+    printf("[STORAGE] No se encontró historia previa. Creando bloque Genesis...\n");
+    chain = blockchain_create_empty();
+    if (!chain)
+        return NULL;
+
+    Block *genesis = create_genesis_block();
+    if (!genesis)
+    {
+        blockchain_free(chain);
+        return NULL;
+    }
+
+    ValidatorSet val_set = {0};
+    val_set.count = 1;
+    strncpy(val_set.validators[0], "VAL_NODE_01", sizeof(val_set.validators[0]) - 1);
+
+    if (!blockchain_add_block(chain, genesis, &val_set))
+    {
+        block_free(genesis);
+        blockchain_free(chain);
+        return NULL;
+    }
+
+    storage_save_blockchain(chain, db_path);
+    return chain;
 }

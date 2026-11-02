@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -I./lib
+CFLAGS = -Wall -Wextra -g
 LDFLAGS = -lcrypto
 
 OBJS = src/blockchain.o src/block.o src/transaction.o \

@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "../lib/mempool.h"
 #include <stdio.h>
 #include <string.h>
@@ -7,12 +9,15 @@
 #include <fcntl.h>
 
 
-
 void mempool_init(Mempool *mp) {
     if (!mp) return;
     memset(mp->transactions, 0, sizeof(mp->transactions)); mp->count=0;
 }
 
+size_t mempool_size(const Mempool *mp)
+{
+    return mp ? mp->count : 0;
+}
 
 int mempool_add_tx(Mempool *mp, const Transaction *tx)
 {

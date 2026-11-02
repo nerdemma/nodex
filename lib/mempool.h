@@ -13,6 +13,7 @@ typedef struct{
 } Mempool;
 
 void mempool_init(Mempool *mp);
+size_t mempool_size(const Mempool *mp);
 int mempool_add_tx(Mempool *mp, const Transaction *tx);
 void mempool_clear(Mempool *mp);
 
